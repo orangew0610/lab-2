@@ -102,7 +102,11 @@ class AlgorithmBuilder:
         """Record a full Stockham FFT high-level op. Lowers to multiple stages.
         """
         self.ops.append(("stockham_fft", input_name, output_name, axis))
-
+    
+    # Add this method inside class AlgorithmBuilder, after stockham_fft.
+    # It records a Cooley‑Tukey operation into the builder's op list.
+    def cooley_tukey_fft(self, input, output, n):
+        self.ops.append(("cooley_tukey_fft", input, output, n))
 
 class Algorithm:
     """Wrapper for a user-defined algorithm function.

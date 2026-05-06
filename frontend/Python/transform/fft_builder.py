@@ -115,6 +115,8 @@ def build_mlir_from_builder(builder, N: int, name: Optional[str] = None, mode: s
                     lower_reshape,
                     lower_stockham_stage,
                     lower_stockham_fft,
+                    lower_cooley_tukey_stage,
+                    lower_cooley_tukey_fft, 
                 )
 
                 # Lower recorded ops sequentially
@@ -187,7 +189,26 @@ def build_mlir_from_builder(builder, N: int, name: Optional[str] = None, mode: s
 
                         # pass shape so the FFT expansion can insert stages that end in the output
                         lower_stockham_fft(in_name, out_name, shape, axis, symtab, insert_after, f32, arith, memref, idx)
+                   
+                    elif opname == "cooley_tukey_stage":
+                        # ("cooley_tukey_stage", in, out, stage, axis)
+                        _, in_name, out_name, stage, axis = op
+                        in_r, in_i = ensure_buffer(in_name)
+                        out_r, out_i = ensure_buffer(out_name)
+                        lower_cooley_tukey_stage(in_r, in_i, out_r, out_i, shape, axis, stage, f32, arith, memref, idx)
 
+                    elif opname == "cooley_tukey_fft":
+                        # ("cooley_tukey_fft", in, out, n)
+                        _, in_name, out_name, n = op
+                        shape = [n]          # treat as 1D
+                        axis = 0             # single axis
+                        inserted = [0]
+                        def insert_after(x):
+                            idx = builder.ops.index(op) + 1 + inserted[0]
+                            builder.ops.insert(idx, x)
+                            inserted[0] += 1
+                        lower_cooley_tukey_fft(in_name, out_name, shape, axis, symtab,
+                                               insert_after, f32, arith, memref, idx)
                     else:
                         # unknown op: ignore or could raise
                         # for now, skip

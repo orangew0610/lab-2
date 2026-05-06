@@ -483,4 +483,50 @@ def lower_stockham_fft(in_name, out_name, shape, axis, symtab, builder_ops_inser
         Lf = shape[last_ax]
         builder_ops_insert(("permute", cur_in, out_name, list(range(Lf)), last_ax))
 
+# Append these two functions to ops/fft.py
 
+def lower_cooley_tukey_stage(in_r, in_i, out_r, out_i, shape, axis, stage, f32, arith, memref, idx_type):
+    """Single radix-2 stage (same as Stockham)."""
+    return lower_stockham_stage(in_r, in_i, out_r, out_i, shape, axis, stage, f32, arith, memref, idx_type)
+
+def lower_cooley_tukey_fft(in_name, out_name, shape, axis, symtab, builder_ops_insert, f32, arith, memref, idx_type):
+    """Expand Cooley‑Tukey: bit‑reverse + log2(N) stages."""
+    import math
+    def bitrev(i, bits):
+        r = 0
+        for _ in range(bits):
+            r = (r << 1) | (i & 1)
+            i >>= 1
+        return r
+
+    cur_in = in_name
+    if axis is None:
+        axes_to_process = list(range(len(shape)))
+    else:
+        if axis < 0:
+            axis = len(shape) + axis
+        axes_to_process = [axis]
+
+    for ax in axes_to_process:
+        L = shape[ax]
+        stages_ax = int(math.log2(L))
+        # bit-reverse permutation
+        br_name = f"{cur_in}_br_ax{ax}"
+        bits = int(math.log2(L))
+        pattern = [bitrev(i, bits) for i in range(L)]
+        builder_ops_insert(("permute", cur_in, br_name, pattern, ax))
+        work_in = br_name
+        # radix-2 stages
+        for s in range(stages_ax):
+            if s == stages_ax - 1:
+                next_name = f"{out_name}_ax{ax}" if ax != axes_to_process[-1] else out_name
+            else:
+                next_name = f"{out_name}_ax{ax}_stage{s}"
+            builder_ops_insert(("cooley_tukey_stage", work_in, next_name, s, ax))
+            work_in = next_name
+        cur_in = work_in
+
+    if cur_in != out_name:
+        last_ax = axes_to_process[-1]
+        Lf = shape[last_ax]
+        builder_ops_insert(("permute", cur_in, out_name, list(range(Lf)), last_ax))

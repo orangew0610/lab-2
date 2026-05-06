@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+llvm-project/
+frontend/Python/__pycache__/
+frontend/Python/ops/__pycache__/
+frontend/Python/transform/__pycache__/
+__pycache__/
