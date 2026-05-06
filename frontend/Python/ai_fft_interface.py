@@ -8,8 +8,8 @@ import re
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 
-from fftc import algorithm, AlgorithmBuilder
-from ai_fft_recommender import FFTAlgorithmRecommender, AlgorithmRecommendation
+from frontend.Python.fftc import algorithm, AlgorithmBuilder
+from frontend.Python.ai_fft_recommender import FFTAlgorithmRecommender, AlgorithmRecommendation
 
 
 @dataclass

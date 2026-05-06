@@ -7,7 +7,7 @@ import json
 import sys
 from typing import Dict, Any, Optional
 
-from ai_fft_interface import FFTCompilerInterface, create_fft_interface
+from frontend.Python.ai_fft_interface import FFTCompilerInterface, create_fft_interface
 
 
 class AIFFTCompiler:
