@@ -198,17 +198,14 @@ def build_mlir_from_builder(builder, N: int, name: Optional[str] = None, mode: s
                         lower_cooley_tukey_stage(in_r, in_i, out_r, out_i, shape, axis, stage, f32, arith, memref, idx)
 
                     elif opname == "cooley_tukey_fft":
-                        # ("cooley_tukey_fft", in, out, n)
-                        _, in_name, out_name, n = op
-                        shape = [n]          # treat as 1D
-                        axis = 0             # single axis
+                        # ("cooley_tukey_fft", in, out, axis)
+                        _, in_name, out_name, axis = op
                         inserted = [0]
                         def insert_after(x):
                             idx = builder.ops.index(op) + 1 + inserted[0]
                             builder.ops.insert(idx, x)
                             inserted[0] += 1
-                        lower_cooley_tukey_fft(in_name, out_name, shape, axis, symtab,
-                                               insert_after, f32, arith, memref, idx)
+                        lower_cooley_tukey_fft(in_name, out_name, shape, axis, symtab, insert_after, f32, arith, memref, idx)
                     else:
                         # unknown op: ignore or could raise
                         # for now, skip

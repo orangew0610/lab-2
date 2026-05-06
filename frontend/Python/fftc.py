@@ -105,8 +105,8 @@ class AlgorithmBuilder:
     
     # Add this method inside class AlgorithmBuilder, after stockham_fft.
     # It records a Cooley‑Tukey operation into the builder's op list.
-    def cooley_tukey_fft(self, input, output, n):
-        self.ops.append(("cooley_tukey_fft", input, output, n))
+    def cooley_tukey_fft(self, input, output, axis = None) -> None:
+        self.ops.append(("cooley_tukey_fft", input, output, axis))
 
 class Algorithm:
     """Wrapper for a user-defined algorithm function.
