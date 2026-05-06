@@ -1,0 +1,4 @@
+[submodule "llvm-project"]
+	path = llvm-project
+	url = https://mirrors.hust.edu.cn/git/llvm-project.git
+	branch = llvmorg-19.1.7
