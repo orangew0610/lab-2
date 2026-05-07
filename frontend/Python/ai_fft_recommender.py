@@ -130,17 +130,24 @@ class FFTAlgorithmRecommender:
         self.supported_algorithms = {
             "stockham_fft": {
                 "name": "Stockham FFT",
-                "description": "基于Stockham算法的FFT实现，适合大多数情况",
+                "description": "基于Stockham算法的快速傅里叶变换",
                 "time_complexity": "O(N log N)",
                 "space_complexity": "O(N)",
-                "best_for": ["通用FFT计算", "大规模数据", "SIMD优化"]
+                "best_for": ["大规模数据", "通用场景", "高精度计算"]
+            },
+            "cooley_tukey_fft": {
+                "name": "Cooley-Tukey FFT",
+                "description": "基于Cooley-Tukey算法的快速傅里叶变换",
+                "time_complexity": "O(N log N)",
+                "space_complexity": "O(N)",
+                "best_for": ["中等规模数据", "分治策略", "通用FFT实现"]
             },
             "dft": {
                 "name": "直接DFT",
-                "description": "直接离散傅里叶变换，适合小规模数据",
-                "time_complexity": "O(N^2)",
+                "description": "直接离散傅里叶变换",
+                "time_complexity": "O(N²)",
                 "space_complexity": "O(1)",
-                "best_for": ["小规模数据", "调试和验证"]
+                "best_for": ["小规模数据", "调试验证", "简单实现"]
             }
         }
     
@@ -221,7 +228,7 @@ class FFTAlgorithmRecommender:
         {json.dumps(self.supported_algorithms, indent=2, ensure_ascii=False)}
         
         请以JSON格式返回推荐结果，包含以下字段：
-        - recommended_algorithm: 推荐的算法名称（必须是stockham_fft或dft）
+        - recommended_algorithm: 推荐的算法名称（必须是stockham_fft、cooley_tukey_fft或dft）
         - algorithm_parameters: 算法参数（包含input_name, output_name, axis, radix）
         - rationale: 推荐理由
         - expected_performance: 预期性能指标（包含time_complexity, space_complexity, suitability_score）
@@ -289,10 +296,14 @@ class FFTAlgorithmRecommender:
         for size in problem_size:
             total_size *= size
         
-        # 简单的规则：根据数据规模选择算法
-        if total_size <= 64:  # 小规模数据
+        # 改进的规则：根据数据规模选择算法
+        if total_size <= 32:  # 极小规模数据
             algorithm = "dft"
-            rationale = "数据规模较小，直接DFT算法更简单高效"
+            rationale = "数据规模极小，直接DFT算法更简单高效"
+            suitability_score = 0.95
+        elif total_size <= 256:  # 中等规模数据
+            algorithm = "cooley_tukey_fft"
+            rationale = "数据规模中等，Cooley-Tukey FFT算法平衡了性能和实现复杂度"
             suitability_score = 0.9
         else:  # 大规模数据
             algorithm = "stockham_fft"
@@ -368,6 +379,10 @@ class FFTAlgorithmRecommender:
         """
         
         return prompt
+    
+    def get_supported_algorithms(self) -> Dict[str, Any]:
+        """获取支持的算法列表"""
+        return self.supported_algorithms
     
     def _call_llm_api(self, prompt: str) -> str:
         """调用大模型API"""

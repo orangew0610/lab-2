@@ -213,6 +213,12 @@ class FFTCompilerInterface:
                     params["output_name"], 
                     axis=params.get("axis")
                 )
+            elif recommendation.recommended_algorithm == "cooley_tukey_fft":
+                builder.cooley_tukey_fft(
+                    params["input_name"], 
+                    params["output_name"], 
+                    axis=params.get("axis")
+                )
             elif recommendation.recommended_algorithm == "dft":
                 builder.dft(params["input_name"])
             else:

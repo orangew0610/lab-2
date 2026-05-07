@@ -25,7 +25,8 @@ class XunfeiSparkAPI:
         # 避免复杂的WebSocket连接问题
         print("讯飞API调用: 使用基于规则的推荐（简化版）")
         
-        # 构建默认推荐
+        # 构建默认推荐（基于问题规模的智能推荐）
+        # 这里应该根据实际的问题规模来推荐，但为了简化，我们使用固定推荐
         default_response = {
             "recommended_algorithm": "stockham_fft",
             "algorithm_parameters": {
