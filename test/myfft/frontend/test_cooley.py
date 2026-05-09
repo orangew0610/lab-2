@@ -1,6 +1,7 @@
 import numpy as np
 from frontend.Python.fftc import algorithm
 from frontend.Python.ops.fft_mlir_runner import run_mlir_module
+
 shape = (2,2,2,2) #Test a 2D FFT with shape (2,4) to verify multi-axis Stockham handling. This is a small size for easy verification; can be increased as needed.
 # prepare input
 total = 1
@@ -12,7 +13,7 @@ def myfft(b):
     b.output('out')
     #b.dft('in','out')
     # default (axis=None) -> perform full ND Stockham across all axes
-    b.stockham_fft('in','out')
+    b.cooley_tukey_fft('in','out')
 
 
 mlir_text = myfft.compile_to_mlir(N=shape, name='fft_staged_test', mode='bindings')
@@ -24,7 +25,7 @@ in_r = np.arange(total, dtype=np.float32).reshape(shape)
 in_i = np.zeros(shape, dtype=np.float32).reshape(shape)
 out_r = np.zeros(shape, dtype=np.float32)
 out_i = np.zeros(shape, dtype=np.float32)
-print(in_r)
+#print(in_r)
 print('Running ExecutionEngine...')
 results = run_mlir_module(mlir_text2, 'fft_staged_test', [in_r, in_i, out_r, out_i])
 print('run done')

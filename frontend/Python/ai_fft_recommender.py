@@ -8,8 +8,10 @@ import base64
 import hashlib
 import hmac
 import time
-from datetime import datetime
-from urllib.parse import urlencode, urlparse
+import datetime
+from urllib.parse import urlencode
+from wsgiref.handlers import format_date_time
+from time import mktime
 import websocket
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
@@ -28,26 +30,36 @@ class XunfeiSparkAPI:
 
     def _generate_auth_url(self) -> str:
         """生成鉴权后的WebSocket URL"""
-        now = datetime.now()
-        date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
-        signature_origin = f"host: {self.host}\ndate: {date}\nGET {self.path} HTTP/1.1"
+        now = datetime.datetime.now()
+        date = format_date_time(mktime(now.timetuple()))
+
+        signature_origin = "host: " + self.host + "\n"
+        signature_origin += "date: " + date + "\n"
+        signature_origin += "GET " + self.path + " HTTP/1.1"
+
         signature_sha = hmac.new(
             self.api_secret.encode('utf-8'),
             signature_origin.encode('utf-8'),
-            hashlib.sha256
+            digestmod=hashlib.sha256
         ).digest()
+
         signature_sha_base64 = base64.b64encode(signature_sha).decode('utf-8')
+
         authorization_origin = (
-            f'api_key="{self.api_key}", algorithm="hmac-sha256", '
-            f'headers="host date request-line", signature="{signature_sha_base64}"'
+            'api_key="' + self.api_key + '", algorithm="hmac-sha256", '
+            'headers="host date request-line", '
+            'signature="' + signature_sha_base64 + '"'
         )
+
         authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode('utf-8')
+
         params = {
-            'authorization': authorization,
-            'date': date,
-            'host': self.host
+            "authorization": authorization,
+            "date": date,
+            "host": self.host
         }
-        return f"{self.ws_url}?{urlencode(params)}"
+
+        return self.ws_url + "?" + urlencode(params)
 
     def chat_completion(self, messages: List[Dict[str, str]], stream: bool = True) -> str:
         """调用星火大模型API"""
@@ -61,13 +73,16 @@ class XunfeiSparkAPI:
         def on_message(ws, message):
             nonlocal response_text
             data = json.loads(message)
-            if data.get("payload", {}).get("choices", {}).get("content"):
-                content = data["payload"]["choices"]["content"][0]["text"]
-                response_text += content
-                print(f"[大模型响应] 收到响应片段，当前累计长度: {len(response_text)}")
+            if "payload" in data and "choices" in data["payload"]:
+                content_list = data["payload"]["choices"].get("text", [])
+                for item in content_list:
+                    if "content" in item:
+                        response_text += item["content"]
 
         def on_error(ws, error):
-            print(f"[大模型错误] WebSocket错误: {error}")
+            # 只在未收到响应时记录错误（正常关闭会触发此回调）
+            if not response_text:
+                print(f"[大模型错误] WebSocket错误: {error}")
 
         def on_close(ws, close_status_code, close_msg):
             print(f"[大模型调用] WebSocket连接关闭，状态码: {close_status_code}")
@@ -77,11 +92,11 @@ class XunfeiSparkAPI:
             payload = {
                 "header": {
                     "app_id": self.app_id,
-                    "uid": "12345"
+                    "uid": "user_001"
                 },
                 "parameter": {
                     "chat": {
-                        "domain": "general",
+                        "domain": "lite",
                         "temperature": 0.5,
                         "max_tokens": 2048
                     }
@@ -92,7 +107,7 @@ class XunfeiSparkAPI:
                     }
                 }
             }
-            ws.send(json.dumps(payload))
+            ws.send(json.dumps(payload, ensure_ascii=False))
 
         response_text = ""
 
@@ -224,15 +239,28 @@ class FFTAlgorithmRecommender:
                                    environment: Dict[str, Any]) -> AlgorithmRecommendation:
         """基于讯飞星火API的算法推荐"""
         
-        # 构建提示词
-        prompt = self._build_xunfei_prompt(algorithm_description, problem_size, environment)
+        # 构建提示词，明确要求返回JSON格式
+        prompt = f"""请分析以下FFT问题并返回算法推荐，仅输出JSON格式，不要包含其他内容：
         
-        # 构建消息
+问题描述：{algorithm_description}
+问题规模：{problem_size}
+运行环境：{environment}
+
+可选算法：
+1. stockham_fft - 基于Stockham算法的FFT，适合大规模数据，O(N log N)复杂度
+2. cooley_tukey_fft - 基于Cooley-Tukey算法的FFT，适合中等规模数据
+3. dft - 直接DFT，适合小规模数据，O(N²)复杂度
+
+请返回JSON格式：
+{{
+    "recommended_algorithm": "算法名称",
+    "algorithm_parameters": {{"input_name": "input", "output_name": "output", "axis": null, "radix": 2}},
+    "rationale": "推荐理由",
+    "expected_performance": {{"time_complexity": "O(N log N)", "space_complexity": "O(N)", "suitability_score": 0.8}}
+}}"""
+        
+        # 构建消息（Lite版本只支持user角色）
         messages = [
-            {
-                "role": "system", 
-                "content": "你是一个FFT算法专家，擅长根据问题特征推荐最佳算法。请以JSON格式返回结果。"
-            },
             {
                 "role": "user", 
                 "content": prompt
@@ -243,7 +271,9 @@ class FFTAlgorithmRecommender:
         response = self.xunfei_client.chat_completion(messages)
         
         # 解析响应
-        return self._parse_xunfei_response(response)
+        result = self._parse_xunfei_response(response)
+        print(f"[大模型调用] ✅ 使用讯飞星火API推荐算法: {result.recommended_algorithm}")
+        return result
     
     def _build_xunfei_prompt(self, 
                            algorithm_description: str,
@@ -279,11 +309,18 @@ class FFTAlgorithmRecommender:
             # 尝试提取JSON部分
             json_str = response_text.strip()
             
-            # 如果响应包含代码块，提取JSON部分
-            if '```json' in json_str:
-                json_str = json_str.split('```json')[1].split('```')[0].strip()
-            elif '```' in json_str:
-                json_str = json_str.split('```')[1].strip()
+            # 清理Markdown代码块标记（处理分散的标记）
+            json_str = json_str.replace('```json', '').replace('```', '').replace('`', '')
+            
+            # 查找JSON的起始位置（第一个{）
+            start_idx = json_str.find('{')
+            if start_idx != -1:
+                json_str = json_str[start_idx:]
+            
+            # 查找JSON的结束位置（最后一个}）
+            end_idx = json_str.rfind('}')
+            if end_idx != -1:
+                json_str = json_str[:end_idx + 1]
             
             # 解析JSON
             result = json.loads(json_str)
@@ -365,6 +402,7 @@ class FFTAlgorithmRecommender:
                 "suitability_score": suitability_score
             }
         )
+        print(f"[大模型调用] ✅ 使用基于规则的推荐算法: {algorithm}")
     
     def _llm_based_recommendation(self, 
                                 algorithm_description: str,
@@ -380,7 +418,9 @@ class FFTAlgorithmRecommender:
             response = self._call_llm_api(prompt)
             
             # 解析响应
-            return self._parse_llm_response(response)
+            result = self._parse_llm_response(response)
+            print(f"[大模型调用] ✅ 使用OpenAI API推荐算法: {result.recommended_algorithm}")
+            return result
             
         except Exception as e:
             # 如果API调用失败，回退到基于规则的推荐

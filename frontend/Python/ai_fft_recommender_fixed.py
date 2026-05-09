@@ -30,7 +30,7 @@ class XunfeiSparkAPI:
 
     def _generate_auth_url(self) -> str:
         """生成鉴权后的WebSocket URL"""
-        now = datetime.now()
+        now = datetime.utcnow()
         date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
         signature_origin = f"host: {self.host}\ndate: {date}\nGET {self.path} HTTP/1.1"
         signature_sha = hmac.new(
@@ -75,7 +75,7 @@ class XunfeiSparkAPI:
                 },
                 "parameter": {
                     "chat": {
-                        "domain": "general",
+                        "domain": "lite",
                         "temperature": 0.5,
                         "max_tokens": 2048
                     }
@@ -209,15 +209,12 @@ class FFTAlgorithmRecommender:
                                    environment: Dict[str, Any]) -> AlgorithmRecommendation:
         """基于讯飞星火API的算法推荐"""
         
-        # 构建提示词
-        prompt = self._build_xunfei_prompt(algorithm_description, problem_size, environment)
+        # 构建提示词（Lite版本不支持system角色，所以将系统提示融入用户消息）
+        system_prompt = "你是一个FFT算法专家，擅长根据问题特征推荐最佳算法。请以JSON格式返回结果。\n\n"
+        prompt = system_prompt + self._build_xunfei_prompt(algorithm_description, problem_size, environment)
         
-        # 构建消息
+        # 构建消息（Lite版本只支持user角色）
         messages = [
-            {
-                "role": "system", 
-                "content": "你是一个FFT算法专家，擅长根据问题特征推荐最佳算法。请以JSON格式返回结果。"
-            },
             {
                 "role": "user", 
                 "content": prompt
