@@ -146,16 +146,16 @@ def example_with_api_key():
     print("\n" + "=" * 60)
     print("示例6: 使用LLM API（需要API key）")
     print("=" * 60)
-    
-    # 这里需要替换为你的实际API key
-    api_key = "your_api_key_here"  # 请替换为实际API key
-    
-    if api_key == "your_api_key_here":
-        print("⚠ 请设置有效的API key来使用LLM推荐功能")
-        print("当前使用基于规则的推荐")
-        api_key = None
-    
-    compiler = create_compiler(api_key=api_key)
+
+    xunfei_app_id = "f3de8856"
+    xunfei_api_secret = "NmQ0MTczZGQxNzk2NDM0ZjI4YTBiY2Zi"
+    xunfei_api_key = "8cef3eb1b83ceb3b058ab1a545b08cff"
+
+    compiler = create_compiler(
+        xunfei_app_id=xunfei_app_id,
+        xunfei_api_secret=xunfei_api_secret,
+        xunfei_api_key=xunfei_api_key
+    )
     
     result = compiler.compile(
         algorithm_description="复杂的信号处理FFT，需要高精度计算",

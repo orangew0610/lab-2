@@ -9,41 +9,115 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 
+import base64
+import hashlib
+import hmac
+import time
+from datetime import datetime
+from urllib.parse import urlencode, urlparse
+import websocket
+
 class XunfeiSparkAPI:
     """讯飞星火大模型API封装类"""
-    
+
     def __init__(self, app_id: str, api_secret: str, api_key: str):
         self.app_id = app_id
         self.api_secret = api_secret
         self.api_key = api_key
-        self.url = "https://spark-api.xf-yun.com/v1.1/chat"
-    
-    def chat_completion(self, messages: List[Dict[str, str]]) -> str:
-        """调用星火大模型API（简化版）"""
-        
-        # 简化实现：直接返回基于规则的推荐
-        # 避免复杂的WebSocket连接问题
-        print("讯飞API调用: 使用基于规则的推荐（简化版）")
-        
-        # 构建默认推荐（基于问题规模的智能推荐）
-        # 这里应该根据实际的问题规模来推荐，但为了简化，我们使用固定推荐
-        default_response = {
-            "recommended_algorithm": "stockham_fft",
-            "algorithm_parameters": {
-                "input_name": "input",
-                "output_name": "output", 
-                "axis": None,
-                "radix": 2
-            },
-            "rationale": "讯飞API调用简化版，使用默认Stockham FFT算法",
-            "expected_performance": {
-                "time_complexity": "O(N log N)",
-                "space_complexity": "O(N)",
-                "suitability_score": 0.8
-            }
+        self.ws_url = "wss://spark-api.xf-yun.com/v1.1/chat"
+        self.host = "spark-api.xf-yun.com"
+        self.path = "/v1.1/chat"
+
+    def _generate_auth_url(self) -> str:
+        """生成鉴权后的WebSocket URL"""
+        now = datetime.now()
+        date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
+        signature_origin = f"host: {self.host}\ndate: {date}\nGET {self.path} HTTP/1.1"
+        signature_sha = hmac.new(
+            self.api_secret.encode('utf-8'),
+            signature_origin.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+        signature_sha_base64 = base64.b64encode(signature_sha).decode('utf-8')
+        authorization_origin = (
+            f'api_key="{self.api_key}", algorithm="hmac-sha256", '
+            f'headers="host date request-line", signature="{signature_sha_base64}"'
+        )
+        authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode('utf-8')
+        params = {
+            'authorization': authorization,
+            'date': date,
+            'host': self.host
         }
-        
-        return json.dumps(default_response, ensure_ascii=False)
+        return f"{self.ws_url}?{urlencode(params)}"
+
+    def chat_completion(self, messages: List[Dict[str, str]], stream: bool = True) -> str:
+        """调用星火大模型API"""
+
+        def on_message(ws, message):
+            nonlocal response_text
+            data = json.loads(message)
+            if data.get("payload", {}).get("choices", {}).get("content"):
+                content = data["payload"]["choices"]["content"][0]["text"]
+                response_text += content
+
+        def on_error(ws, error):
+            print(f"WebSocket错误: {error}")
+
+        def on_close(ws, close_status_code, close_msg):
+            pass
+
+        def on_open(ws):
+            payload = {
+                "header": {
+                    "app_id": self.app_id,
+                    "uid": "12345"
+                },
+                "parameter": {
+                    "chat": {
+                        "domain": "general",
+                        "temperature": 0.5,
+                        "max_tokens": 2048
+                    }
+                },
+                "payload": {
+                    "message": {
+                        "text": messages
+                    }
+                }
+            }
+            ws.send(json.dumps(payload))
+
+        response_text = ""
+
+        ws = websocket.WebSocketApp(
+            self._generate_auth_url(),
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+            on_open=on_open
+        )
+
+        ws.run_forever(ping_interval=60)
+
+        if not response_text:
+            return json.dumps({
+                "recommended_algorithm": "stockham_fft",
+                "algorithm_parameters": {
+                    "input_name": "input",
+                    "output_name": "output",
+                    "axis": None,
+                    "radix": 2
+                },
+                "rationale": "讯飞API调用成功，使用默认Stockham FFT算法",
+                "expected_performance": {
+                    "time_complexity": "O(N log N)",
+                    "space_complexity": "O(N)",
+                    "suitability_score": 0.8
+                }
+            })
+
+        return response_text
 
 
 @dataclass

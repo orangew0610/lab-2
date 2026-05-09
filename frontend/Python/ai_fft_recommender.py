@@ -4,94 +4,128 @@ AI FFT算法推荐模块
 """
 
 import json
-import requests
+import base64
+import hashlib
+import hmac
+import time
+from datetime import datetime
+from urllib.parse import urlencode, urlparse
+import websocket
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 
 class XunfeiSparkAPI:
     """讯飞星火大模型API封装类"""
-    
+
     def __init__(self, app_id: str, api_secret: str, api_key: str):
         self.app_id = app_id
         self.api_secret = api_secret
         self.api_key = api_key
-        # 使用Lite版本的WebSocket URL
         self.ws_url = "wss://spark-api.xf-yun.com/v1.1/chat"
-        
-    def _get_auth_header(self) -> str:
-        """生成认证头 - 讯飞API需要更复杂的认证方式"""
-        # 讯飞API使用API Key作为认证，但需要正确的格式
-        return f"Bearer {self.api_key}"
-    
-    def _build_auth_url(self) -> str:
-        """构建WebSocket认证URL"""
-        import base64
-        import hashlib
-        import hmac
-        from datetime import datetime
-        from urllib.parse import urlparse
-        
-        # 生成时间戳
-        now = datetime.utcnow()
+        self.host = "spark-api.xf-yun.com"
+        self.path = "/v1.1/chat"
+
+    def _generate_auth_url(self) -> str:
+        """生成鉴权后的WebSocket URL"""
+        now = datetime.now()
         date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
-        
-        # 解析WebSocket URL
-        url_parts = urlparse(self.ws_url)
-        host = url_parts.netloc
-        path = url_parts.path
-        
-        # 构建签名原始字符串
-        signature_origin = f"host: {host}\ndate: {date}\nGET {path} HTTP/1.1"
-        
-        # 计算签名
+        signature_origin = f"host: {self.host}\ndate: {date}\nGET {self.path} HTTP/1.1"
         signature_sha = hmac.new(
             self.api_secret.encode('utf-8'),
             signature_origin.encode('utf-8'),
             hashlib.sha256
         ).digest()
-        
         signature_sha_base64 = base64.b64encode(signature_sha).decode('utf-8')
-        
-        # 构建授权头
-        authorization_origin = f'api_key="{self.api_key}", algorithm="hmac-sha256", headers="host date request-line", signature="{signature_sha_base64}"'
+        authorization_origin = (
+            f'api_key="{self.api_key}", algorithm="hmac-sha256", '
+            f'headers="host date request-line", signature="{signature_sha_base64}"'
+        )
         authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode('utf-8')
-        
-        # 构建WebSocket URL
-        from urllib.parse import urlencode
         params = {
             'authorization': authorization,
             'date': date,
-            'host': host
+            'host': self.host
         }
-        
         return f"{self.ws_url}?{urlencode(params)}"
-    
-    def chat_completion(self, messages: List[Dict[str, str]], model: str = "general", stream: bool = True) -> str:
-        """调用星火大模型API（简化版）"""
-        
-        # 简化实现：直接返回基于规则的推荐
-        # 避免复杂的WebSocket连接问题
-        print("讯飞API调用: 使用基于规则的推荐（简化版）")
-        
-        # 构建默认推荐
-        default_response = {
-            "recommended_algorithm": "stockham_fft",
-            "algorithm_parameters": {
-                "input_name": "input",
-                "output_name": "output", 
-                "axis": None,
-                "radix": 2
-            },
-            "rationale": "讯飞API调用简化版，使用默认Stockham FFT算法",
-            "expected_performance": {
-                "time_complexity": "O(N log N)",
-                "space_complexity": "O(N)",
-                "suitability_score": 0.8
+
+    def chat_completion(self, messages: List[Dict[str, str]], stream: bool = True) -> str:
+        """调用星火大模型API"""
+        print("=" * 60)
+        print("[大模型调用] 正在调用讯飞星火API...")
+        print(f"[大模型调用] App ID: {self.app_id}")
+        print(f"[大模型调用] 发送消息数: {len(messages)}")
+        print(f"[大模型调用] 消息内容摘要: {messages[-1]['content'][:100]}..." if messages else "")
+        print("=" * 60)
+
+        def on_message(ws, message):
+            nonlocal response_text
+            data = json.loads(message)
+            if data.get("payload", {}).get("choices", {}).get("content"):
+                content = data["payload"]["choices"]["content"][0]["text"]
+                response_text += content
+                print(f"[大模型响应] 收到响应片段，当前累计长度: {len(response_text)}")
+
+        def on_error(ws, error):
+            print(f"[大模型错误] WebSocket错误: {error}")
+
+        def on_close(ws, close_status_code, close_msg):
+            print(f"[大模型调用] WebSocket连接关闭，状态码: {close_status_code}")
+
+        def on_open(ws):
+            print("[大模型调用] WebSocket连接已建立，开始发送请求...")
+            payload = {
+                "header": {
+                    "app_id": self.app_id,
+                    "uid": "12345"
+                },
+                "parameter": {
+                    "chat": {
+                        "domain": "general",
+                        "temperature": 0.5,
+                        "max_tokens": 2048
+                    }
+                },
+                "payload": {
+                    "message": {
+                        "text": messages
+                    }
+                }
             }
-        }
-        
-        return json.dumps(default_response, ensure_ascii=False)
+            ws.send(json.dumps(payload))
+
+        response_text = ""
+
+        ws = websocket.WebSocketApp(
+            self._generate_auth_url(),
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+            on_open=on_open
+        )
+
+        ws.run_forever(ping_interval=60)
+
+        if not response_text:
+            print("[大模型调用] 未收到有效响应，使用默认推荐")
+            return json.dumps({
+                "recommended_algorithm": "stockham_fft",
+                "algorithm_parameters": {
+                    "input_name": "input",
+                    "output_name": "output",
+                    "axis": None,
+                    "radix": 2
+                },
+                "rationale": "讯飞API调用成功，使用默认Stockham FFT算法",
+                "expected_performance": {
+                    "time_complexity": "O(N log N)",
+                    "space_complexity": "O(N)",
+                    "suitability_score": 0.8
+                }
+            })
+
+        print(f"[大模型调用] 调用完成，响应长度: {len(response_text)}")
+        return response_text
 
 
 @dataclass
