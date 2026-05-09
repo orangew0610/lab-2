@@ -1,7 +1,7 @@
 import numpy as np
 from frontend.Python.fftc import algorithm
 from frontend.Python.ops.fft_mlir_runner import run_mlir_module
-shape = (2,2,2,2) #Test a 2D FFT with shape (2,4) to verify multi-axis Stockham handling. This is a small size for easy verification; can be increased as needed.
+shape = (2,2,2,2) #Test a ND FFT with shape  to verify multi-axis Stockham handling. This is a small size for easy verification; can be increased as needed.
 # prepare input
 total = 1
 for d in shape:
